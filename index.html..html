@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><title>Dépanne-Moi</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--tx:#1d2320;--mu:#6b736e;--pr:#0f7a4d;--ac:#f08a1c;--bd:#e3dfd6;--map:#e9efe4;--rd:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151a17;--card:#1f2622;--tx:#eef2ef;--mu:#9aa59f;--bd:#2f3833;--map:#1b2a21;--rd:#2c3731}}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+body{max-width:560px;margin:0 auto;padding:12px 14px 40px}
+h1{font-size:20px;margin:6px 0 2px}p.s{color:var(--mu);margin:0 0 12px;font-size:14px}
+.tabs{display:flex;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:4px;margin-bottom:12px}
+.tabs button{flex:1;border:0;background:none;color:var(--mu);padding:10px;border-radius:9px;font-size:15px;font-weight:600}
+.tabs button.on{background:var(--pr);color:#fff}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}
+.chip{border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:20px;padding:7px 12px;white-space:nowrap;font-size:14px}
+.chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.map{position:relative;width:100%;aspect-ratio:1/1;background:var(--map);border:1px solid var(--bd);border-radius:14px;overflow:hidden;touch-action:manipulation}
+.map{z-index:0}.leaflet-container{font:inherit}
+.pin{position:absolute;transform:translate(-50%,-100%);font-size:26px;background:none;border:0;padding:0;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
+.me{position:absolute;width:16px;height:16px;border-radius:50%;background:#2a7de1;border:3px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 0 6px rgba(42,125,225,.25)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-top:12px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.b{border:0;border-radius:10px;padding:11px 14px;font-size:15px;font-weight:600;background:var(--pr);color:#fff}
+.b.o{background:none;color:var(--pr);border:1px solid var(--pr)}.b.r{background:none;color:#c0392b;border:1px solid #c0392b}
+.b.w{width:100%;margin-top:8px}
+label{display:block;font-size:13px;color:var(--mu);margin:10px 0 4px}
+input,select,textarea{width:100%;padding:11px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font-size:16px;font-family:inherit}
+.tag{font-size:12px;padding:3px 8px;border-radius:10px;background:var(--bd);color:var(--tx)}
+.tag.ok{background:#cdeedc;color:#0b5a39}.tag.no{background:#f7d4d0;color:#8a2a20}.tag.wt{background:#fde6c4;color:#8a5200}
+.mu{color:var(--mu);font-size:13px}.hide{display:none}
+</style></head><body>
+<div id="lg" class="card hide" style="margin-top:30px"><h1 style="margin:0">🛠️ Dépanne-Moi</h1><p class="s">Connecte-toi ou crée ton compte.</p>
+<label>Ton prénom (pour créer un compte)</label><input id="ln" autocomplete="given-name">
+<label>E-mail</label><input id="le" type="email" autocomplete="email">
+<label>Mot de passe (6 caractères minimum)</label><input id="lp" type="password" autocomplete="current-password">
+<p id="lm" class="mu" style="color:#c0392b"></p>
+<button class="b w" onclick="doLogin()">Se connecter</button><button class="b o w" onclick="signup()">Créer mon compte</button><button class="chip w" style="margin-top:8px;width:100%" onclick="forgot()">Mot de passe oublié</button></div>
+<div id="app">
+<div class="row"><h1>🛠️ Dépanne-Moi</h1><button id="out" class="chip hide" onclick="AUTH.signOut()">Déconnexion</button></div><div id="who" class="mu"></div>
+<p class="s">Trouve un frigoriste, menuisier, soudeur… près de toi.</p>
+<div class="tabs"><button id="t1" class="on" onclick="tab(1)">Je cherche</button><button id="t2" onclick="tab(2)">Je suis pro</button></div>
+
+<section id="v1">
+  <div class="chips" id="chips"></div>
+  <div class="map" id="map1"></div>
+  <div class="row" style="margin:6px 2px"><span class="mu">Touche un pin pour voir le pro.</span><button class="chip" onclick="locate()">📍 Ma position</button></div>
+  <div id="sheet"></div>
+  <h3 style="margin:18px 0 0">Mes demandes</h3><div id="myreq"><p class="mu">Aucune demande pour l'instant.</p></div>
+</section>
+
+<section id="v2" class="hide">
+  <div id="reg" class="card">
+    <b>Inscris-toi comme professionnel</b>
+    <label>Photo (facultatif)</label><input id="ph" type="file" accept="image/*"><label>Ton nom</label><input id="n" placeholder="Ex : Koné Ibrahim">
+    <label>Ton métier</label><select id="m"></select>
+    <label>Téléphone</label><input id="p" inputmode="tel" placeholder="07 00 00 00 00">
+    <label>Quartier / ville</label><input id="q" placeholder="Ex : Cocody">
+    <label>Tarif de départ (FCFA)</label><input id="t" inputmode="numeric" placeholder="Ex : 5000">
+    <label>Touche la carte pour placer ta position</label>
+    <div class="map" id="map2"></div>
+    <button class="b w" onclick="reg()">S'inscrire</button>
+  </div>
+  <div id="pro" class="hide">
+    <div class="card row"><div id="prof"></div><button class="b o" onclick="delPro()">Supprimer mon profil</button></div>
+    <h3 style="margin:18px 0 0">Demandes reçues</h3><div id="inbox"></div>
+  </div>
+</section>
+
+</div>
+<script>
+/* === COLLE ICI TA CONFIG FIREBASE (voir explications) === */
+const FB={apiKey:"AIzaSyCXTSMy6-zWWA83-hiqdMeDpPWN_RUZd8w",authDomain:"depanne-moi-44b2e.firebaseapp.com",projectId:"depanne-moi-44b2e",appId:"1:1011156951539:web:1e632196060039b9aff286"};
+const cloud=()=>typeof firebase!=="undefined"&&!!FB.projectId;
+let CID;try{CID=localStorage.getItem("dmcid");if(!CID){CID="c"+Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem("dmcid",CID)}}catch(e){CID="c"+Date.now()}
+const M=[["❄️","Frigoriste"],["🪚","Menuisier"],["🔥","Soudeur"],["⚡","Électricien"],["🔧","Plombier"],["🎨","Peintre"],["🧱","Maçon"],["📱","Réparateur"]];
+const ic=n=>(M.find(x=>x[1]==n)||["🛠️"])[0];
+const fmt=n=>Number(n).toLocaleString("fr-FR")+" FCFA";
+let S={workers:[
+ {id:"d1",name:"Koné Ibrahim",job:"Frigoriste",tel:"0707000001",area:"Cocody",price:5000,lat:5.360,lng:-3.990},
+ {id:"d2",name:"Yao Serge",job:"Soudeur",tel:"0707000002",area:"Yopougon",price:7000,lat:5.340,lng:-4.080},
+ {id:"d3",name:"Traoré Moussa",job:"Menuisier",tel:"0707000003",area:"Marcory",price:6000,lat:5.300,lng:-3.980},
+ {id:"d4",name:"Bamba Aïcha",job:"Électricien",tel:"0707000004",area:"Plateau",price:4000,lat:5.320,lng:-4.020}],
+ reqs:[],reviews:[],me:null};
+try{const o=JSON.parse(localStorage.getItem("dm2")||"null");if(cloud())S={workers:[],reqs:[],reviews:[],me:o&&o.me||null};else if(o)S=o}catch(e){}
+function save(){try{localStorage.setItem("dm2",JSON.stringify(cloud()?{me:S.me}:S))}catch(e){}}
+S.reviews=S.reviews||[];
+let DB,AUTH,USER=null,unsub=[];const TEL={};
+const UID=()=>USER?USER.uid:CID;
+const rv=id=>S.reviews.filter(v=>v.w==id).sort((a,b)=>(b.t||0)-(a.t||0)),r5=v=>Math.max(1,Math.min(5,v.rating|0));
+function stars(id){const a=rv(id);if(!a.length)return"Pas encore d'avis";return"⭐ "+(a.reduce((t,v)=>t+r5(v),0)/a.length).toFixed(1)+" ("+a.length+" avis)"}
+function av(w){const ok=/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(w.photo||"");const z="width:52px;height:52px;border-radius:50%;flex:none";return ok?`<img src="${w.photo}" style="${z};object-fit:cover">`:`<div style="${z};background:var(--bd);display:grid;place-items:center;font-size:26px">${ic(w.job)}</div>`}
+function revs(id){return rv(id).slice(0,3).map(v=>`<div class="mu" style="margin-top:6px">${"★".repeat(r5(v))}${"☆".repeat(5-r5(v))} ${esc(v.client||"")}${v.text?" : "+esc(v.text):""}</div>`).join("")}
+function wa(t){let d=String(t).replace(/\D/g,"");if(d.startsWith("00"))d=d.slice(2);else if(d.startsWith("0"))d="225"+d;return d}
+function shrink(f){return new Promise(res=>{if(!f)return res("");const im=new Image();im.onload=()=>{const c=document.createElement("canvas"),k=Math.min(1,240/Math.max(im.width,im.height));c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",.7))};im.onerror=()=>res("");im.src=URL.createObjectURL(f)})}
+function reviewUI(r){if(S.reviews.some(v=>v.id==r.id))return'<p class="mu">Merci pour ton avis ✅</p>';return`<label>Ton avis sur ce pro</label><select id="rt${r.id}"><option value="5">★★★★★ Excellent</option><option value="4">★★★★ Bien</option><option value="3">★★★ Moyen</option><option value="2">★★ Mauvais</option><option value="1">★ Très mauvais</option></select><input id="rv${r.id}" placeholder="Un commentaire (facultatif)" style="margin-top:8px"><button class="b w" onclick="rate('${r.id}')">Envoyer mon avis</button>`}
+function rate(id){const r=S.reqs.find(x=>x.id==id);putV({id,w:r.w,rating:parseInt(document.getElementById("rt"+id).value),text:document.getElementById("rv"+id).value.trim().slice(0,200),client:r.client,cuid:UID(),t:Date.now()})}
+function putV(v){if(DB)DB.collection("reviews").doc(v.id).set(v).catch(e=>alert("Erreur d'envoi : "+e.message));else{up(S.reviews,v);save()}draw()}
+function up(list,o){const i=list.findIndex(x=>x.id==o.id);if(i<0)list.unshift(o);else list[i]=o}
+function putW(w){if(DB)DB.collection("workers").doc(w.id).set(w).catch(e=>alert("Erreur d'envoi : "+e.message));else{up(S.workers,w);save()}draw()}
+function putR(r){if(DB)DB.collection("requests").doc(r.id).set(r).catch(e=>alert("Erreur d'envoi : "+e.message));else{up(S.reqs,r);save()}draw()}
+const $l=t=>document.getElementById("lm").textContent=t;
+function authErr(e){return({"auth/invalid-email":"Adresse e-mail invalide.","auth/missing-password":"Entre un mot de passe.","auth/weak-password":"Mot de passe trop court (6 caractères minimum).","auth/email-already-in-use":"Cette adresse a déjà un compte. Connecte-toi.","auth/invalid-credential":"E-mail ou mot de passe incorrect.","auth/network-request-failed":"Pas d'internet.","auth/operation-not-supported-in-this-environment":"Ouvre l'application depuis son lien en ligne (https), pas depuis le fichier."})[e.code]||e.message}
+async function doLogin(){$l("");try{await AUTH.signInWithEmailAndPassword(le.value.trim(),lp.value)}catch(e){$l(authErr(e))}}
+async function signup(){$l("");if(!ln.value.trim()){$l("Entre ton prénom.");return}try{const c=await AUTH.createUserWithEmailAndPassword(le.value.trim(),lp.value);await c.user.updateProfile({displayName:ln.value.trim()});USER=AUTH.currentUser;draw()}catch(e){$l(authErr(e))}}
+async function forgot(){if(!le.value.trim()){$l("Entre d'abord ton e-mail.");return}try{await AUTH.sendPasswordResetEmail(le.value.trim());$l("E-mail de réinitialisation envoyé ✅")}catch(e){$l(authErr(e))}}
+async function loadTel(w){if(!DB||TEL[w]!==undefined)return;TEL[w]=null;try{const d=await DB.collection("priv").doc(w).get();TEL[w]=d.exists?d.data().tel:"";draw()}catch(e){TEL[w]=""}}
+function delPro(){if(!confirm("Supprimer ton profil pro ?"))return;if(DB){DB.collection("workers").doc(UID()).delete();DB.collection("priv").doc(UID()).delete()}else{S.workers=S.workers.filter(a=>a.id!=UID());save();draw()}}
+function sync(){if(!cloud()){draw();return}try{firebase.initializeApp(FB);app.classList.add("hide");DB=firebase.firestore();AUTH=firebase.auth();
+ out.classList.remove("hide");
+ const ok=()=>{const a=document.activeElement;return !(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))},re=()=>{if(ok())draw()};
+ AUTH.onAuthStateChanged(u=>{USER=u;unsub.forEach(f=>f());unsub=[];S.workers=[];S.reviews=[];S.reqs=[];
+  lg.classList.toggle("hide",!!u);app.classList.toggle("hide",!u);
+  if(u){const A={},B={},mix=()=>{S.reqs=Object.values({...A,...B}).sort((a,b)=>(b.t||0)-(a.t||0));re()};
+   unsub.push(DB.collection("workers").onSnapshot(q=>{S.workers=q.docs.map(d=>d.data());re()},e=>alert("Base de données : "+e.message)));
+   unsub.push(DB.collection("reviews").onSnapshot(q=>{S.reviews=q.docs.map(d=>d.data());re()},()=>{}));
+   unsub.push(DB.collection("requests").where("cuid","==",u.uid).onSnapshot(q=>{for(const k in A)delete A[k];q.docs.forEach(d=>A[d.id]=d.data());mix()},()=>{}));
+   unsub.push(DB.collection("requests").where("w","==",u.uid).onSnapshot(q=>{for(const k in B)delete B[k];q.docs.forEach(d=>B[d.id]=d.data());mix()},()=>{}))}
+  draw();setTimeout(()=>{L1&&L1.invalidateSize();L2&&L2.invalidateSize()},120)})}catch(e){alert("Config Firebase invalide : "+e.message)}}
+let filt="Tous",pos=[5.345,-4.024],sel=null;
+function tab(i){v1.classList.toggle("hide",i!=1);v2.classList.toggle("hide",i!=2);t1.className=i==1?"on":"";t2.className=i==2?"on":"";draw();setTimeout(()=>{L1&&L1.invalidateSize();L2&&L2.invalidateSize()},60)}
+function chips(){chips_.innerHTML=["Tous",...M.map(x=>x[1])].map(j=>`<button class="chip ${j==filt?"on":""}" onclick="setF('${j}')">${j=="Tous"?"Tous":ic(j)+" "+j}</button>`).join("")}
+const chips_=document.getElementById("chips"),v1=document.getElementById("v1"),v2=document.getElementById("v2"),t1=document.getElementById("t1"),t2=document.getElementById("t2");
+function setF(j){filt=j;sel=null;draw()}
+function draw(){chips();
+ const w=S.workers.filter(a=>filt=="Tous"||a.job==filt);
+ if(lay1){lay1.clearLayers();w.forEach(a=>L.marker([a.lat,a.lng],{icon:L.divIcon({html:`<span style="font-size:26px">${ic(a.job)}</span>`,className:"",iconSize:[30,30],iconAnchor:[15,28]})}).on("click",()=>pick(a.id)).addTo(lay1))}
+ const s=S.workers.find(a=>a.id==sel);
+ sheet.innerHTML=s?`<div class="card"><div class="row"><div style="display:flex;gap:10px;align-items:center">${av(s)}<div><b>${esc(s.name)}</b><div class="mu">${ic(s.job)} ${s.job} · ${esc(s.area)} · à ${dist(s)} km</div><div class="mu">${stars(s.id)}</div></div></div><span class="tag">dès ${fmt(s.price)}</span></div><div class="row" style="margin-top:10px"><span class="mu">📞 Le numéro apparaît quand le prix est accepté.</span><a class="b o" style="text-decoration:none" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}">🧭</a></div>${revs(s.id)}
+ <label>Ton nom</label><input id="cn" placeholder="Ton prénom" value="${esc(USER&&USER.displayName||"")}">
+ <label>Ton prix proposé (FCFA)</label><input id="cp" inputmode="numeric" value="${s.price}">
+ <label>Ton besoin</label><textarea id="cm" rows="2" placeholder="Ex : mon frigo ne refroidit plus"></textarea>
+ <button class="b w" onclick="sign('${s.id}')">👋 Faire signe et discuter du tarif</button></div>`:(w.length?"":'<p class="mu">Aucun pro pour ce métier.</p>');
+ myreq.innerHTML=S.reqs.filter(r=>r.cuid==UID()).map(card).join("")||'<p class="mu">Aucune demande pour l\'instant.</p>';
+ who.textContent=USER?"Connecté : "+(USER.displayName||USER.email):"";drawPro()}
+const sheet=document.getElementById("sheet"),myreq=document.getElementById("myreq"),map1=document.getElementById("map1");
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function dist(a){const r=Math.PI/180,dl=(a.lat-pos[0])*r,dn=(a.lng-pos[1])*r,h=Math.sin(dl/2)**2+Math.cos(pos[0]*r)*Math.cos(a.lat*r)*Math.sin(dn/2)**2;return (12742*Math.asin(Math.sqrt(h))).toFixed(1)}
+function pick(id){sel=id;const a=S.workers.find(x=>x.id==id);L1&&L1.panTo([a.lat,a.lng]);draw();sheet.scrollIntoView({behavior:"smooth",block:"nearest"})}
+function sign(id){const p=parseInt(cp.value);if(!cn.value.trim()||!p){alert("Indique ton nom et un prix.");return}
+ sel=null;putR({id:id+"_"+UID(),w:id,client:cn.value.trim(),need:cm.value.trim(),price:p,by:"client",st:"wt",cuid:UID(),t:Date.now()})}
+const st={wt:'<span class="tag wt">En attente</span>',ok:'<span class="tag ok">Tarif accepté</span>',no:'<span class="tag no">Refusé</span>'};
+function card(r,pro){const w=S.workers.find(a=>a.id==r.w)||{};
+ let act="";
+ if(r.st=="wt"){const mineTurn=pro?r.by=="client":r.by=="pro";
+  if(mineTurn)act=`<div class="row" style="margin-top:8px"><button class="b" onclick="ans('${r.id}','ok')">Accepter ${fmt(r.price)}</button><button class="b r" onclick="ans('${r.id}','no')">Refuser</button></div><input id="c${r.id}" inputmode="numeric" placeholder="Autre prix (FCFA)" style="margin-top:8px"><button class="b o w" onclick="counter('${r.id}',${pro?1:0})">Contre-proposer</button>`;
+  else act='<p class="mu">En attente de la réponse de l\'autre partie…</p>'}
+ if(r.st=="ok"){let tel=DB?TEL[r.w]:w.tel;if(DB&&!pro)loadTel(r.w);
+  act=`<p style="margin:8px 0 0">✅ Prix fixé : <b>${fmt(r.price)}</b>.</p>`+(pro?'<p class="mu">Le client va te contacter.</p>':(tel?`<div class="row" style="gap:6px"><a class="b o" style="text-decoration:none;flex:1;text-align:center" href="tel:${esc(tel)}">📞 Appeler</a><a class="b o" style="text-decoration:none;flex:1;text-align:center" target="_blank" href="https://wa.me/${wa(tel)}">💬 WhatsApp</a></div>`:'<p class="mu">Chargement du numéro…</p>')+reviewUI(r))}
+ return `<div class="card"><div class="row"><b>${pro?esc(r.client):ic(w.job)+" "+esc(w.name||"")}</b>${st[r.st]}</div>
+ ${r.need?`<div class="mu">${esc(r.need)}</div>`:""}<div style="margin-top:6px">Dernier prix proposé (${r.by=="client"?"client":"pro"}) : <b>${fmt(r.price)}</b></div>${act}</div>`}
+function ans(id,s){const r=S.reqs.find(x=>x.id==id);r.st=s;putR(r)}
+function counter(id,pro){const r=S.reqs.find(x=>x.id==id),p=parseInt(document.getElementById("c"+id).value);if(!p)return;r.price=p;r.by=pro?"pro":"client";putR(r)}
+/* pro */
+const msel=document.getElementById("m");msel.innerHTML=M.map(x=>`<option>${x[1]}</option>`).join("");
+let rp=null,L1,L2,lay1,me1,pm2;
+function tile(m){L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(m)}
+function initMaps(){if(typeof L==="undefined"){map1.innerHTML='<p class="mu" style="padding:14px">Carte indisponible : connecte-toi à internet.</p>';return}
+ L1=L.map("map1").setView(pos,13);tile(L1);lay1=L.layerGroup().addTo(L1);
+ me1=L.circleMarker(pos,{radius:8,color:"#fff",weight:3,fillColor:"#2a7de1",fillOpacity:1}).addTo(L1);
+ L2=L.map("map2").setView(pos,13);tile(L2);
+ L2.on("click",e=>{rp={lat:e.latlng.lat,lng:e.latlng.lng};if(pm2)pm2.setLatLng(e.latlng);else pm2=L.marker(e.latlng).addTo(L2)})}
+function locate(){if(!navigator.geolocation){alert("Position non disponible.");return}
+ navigator.geolocation.getCurrentPosition(p=>{pos=[p.coords.latitude,p.coords.longitude];if(L1){L1.setView(pos,14);me1.setLatLng(pos)}if(L2)L2.setView(pos,14);draw()},()=>alert("Autorise la localisation pour te placer sur la carte."),{enableHighAccuracy:true,timeout:10000})}
+const map2=document.getElementById("map2");
+async function reg(){if(!n.value.trim()||!p.value.trim()||!rp){alert("Remplis ton nom, ton téléphone et touche la carte.");return}
+ const tel=p.value.trim();
+ const w={id:UID(),name:n.value.trim(),job:m.value,area:q.value.trim()||"—",price:parseInt(t.value)||0,lat:rp.lat,lng:rp.lng,photo:await shrink(ph.files&&ph.files[0])};
+ if(DB){await DB.collection("priv").doc(w.id).set({tel}).catch(e=>alert("Erreur : "+e.message))}else w.tel=tel;
+ S.me=w.id;save();putW(w)}
+function drawPro(){const w=S.workers.find(a=>a.id==UID());reg_.classList.toggle("hide",!!w);pro_.classList.toggle("hide",!w);
+ if(!w){return}
+ prof.innerHTML=`<b>${ic(w.job)} ${esc(w.name)}</b><div class="mu">${w.job} · ${esc(w.area)} · visible sur la carte ✅ · ${stars(w.id)}</div>`;
+ inbox.innerHTML=S.reqs.filter(r=>r.w==w.id).map(r=>card(r,1)).join("")||'<p class="mu">Aucune demande reçue.</p>'}
+const reg_=document.getElementById("reg"),pro_=document.getElementById("pro"),prof=document.getElementById("prof"),inbox=document.getElementById("inbox");
+initMaps();sync();locate();
+</script></body></html>
